@@ -1,0 +1,8 @@
+# Credential copies (put here by npm run setup, originally in .config/)
+google-services.json
+GoogleService-Info.plist
+
+# Expo
+.expo/
+dist/
+node_modules/

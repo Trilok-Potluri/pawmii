@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.npm
+
+# Build outputs
+dist/
+build/
+.expo/
+*.js.map
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions/lib/
+
+# EAS / Expo
+*.ipa
+*.apk
+*.aab
+
+# Credentials — NEVER commit these
+# Drop them in .config/ and git-ignore all secrets
+.config/google-services.json
+.config/GoogleService-Info.plist
+.config/config.json
+
+# BUT keep the template and README in git
+!.config/config.template.json
+!.config/README.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Turbo
+.turbo/
+
+# TypeScript
+*.tsbuildinfo

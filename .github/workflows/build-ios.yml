@@ -1,0 +1,55 @@
+name: EAS Build — iOS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build-ios:
+    name: EAS Build iOS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Inject Firebase config
+        run: |
+          mkdir -p .config
+          echo '${{ secrets.FIREBASE_CONFIG_JSON }}' > .config/config.json
+          echo '${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}' > .config/GoogleService-Info.plist
+          node scripts/setup.js
+
+      - name: Build iOS
+        working-directory: apps/mobile
+        run: |
+          eas build --platform ios --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive

@@ -1,0 +1,33 @@
+{
+  "name": "pawmii",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pawmii monorepo — pet + fitness habit app by Lucratech Private Limited",
+  "workspaces": [
+    "apps/mobile",
+    "packages/shared",
+    "functions"
+  ],
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "validate-config": "node scripts/validate-config.js",
+    "mobile": "npm run start --workspace=apps/mobile",
+    "functions:build": "npm run build --workspace=functions",
+    "functions:deploy": "npm run deploy --workspace=functions",
+    "functions:emulate": "npm run emulate --workspace=functions",
+    "shared:build": "npm run build --workspace=packages/shared",
+    "build:ios": "npm run build:ios --workspace=apps/mobile",
+    "build:android": "npm run build:android --workspace=apps/mobile",
+    "turbo:build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}

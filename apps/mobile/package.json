@@ -1,0 +1,46 @@
+{
+  "name": "@pawmii/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo start --android --dev-client",
+    "ios": "expo start --ios --dev-client",
+    "build:ios": "eas build --platform ios --profile preview",
+    "build:android": "eas build --platform android --profile preview",
+    "build:ios:prod": "eas build --platform ios --profile production",
+    "build:android:prod": "eas build --platform android --profile production",
+    "submit:ios": "eas submit --platform ios",
+    "submit:android": "eas submit --platform android",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@pawmii/shared": "*",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/native-stack": "^6.10.1",
+    "expo": "~52.0.0",
+    "expo-build-properties": "~0.13.0",
+    "expo-constants": "~17.0.3",
+    "expo-dev-client": "~4.0.17",
+    "expo-notifications": "~0.29.9",
+    "expo-splash-screen": "~0.29.18",
+    "expo-status-bar": "~2.0.0",
+    "firebase": "^10.12.0",
+    "react": "18.3.1",
+    "react-native": "0.76.3",
+    "react-native-gesture-handler": "~2.20.0",
+    "react-native-health": "^1.19.0",
+    "react-native-health-connect": "^3.5.0",
+    "react-native-reanimated": "~3.16.1",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.1.0",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@types/react": "~18.3.0",
+    "typescript": "^5.4.0"
+  }
+}

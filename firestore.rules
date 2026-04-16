@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User documents ──────────────────────────────────────────────────────
+    // Users can read and write their own doc EXCEPT coinBalance (Cloud Function only).
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Allow writes to non-sensitive fields only.
+      // coinBalance is written exclusively by Cloud Functions (Admin SDK bypasses rules).
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && !('coinBalance' in request.resource.data);
+
+      allow update: if request.auth != null
+        && request.auth.uid == uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coinBalance']);
+
+      // Health logs — user read only; Cloud Functions write via Admin SDK
+      match /healthLogs/{date} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // ── Pet documents ────────────────────────────────────────────────────────
+    match /pets/{petId} {
+      // Owner can read their own pet
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+
+      // Client can create a pet during onboarding with required fields only
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['uid', 'name', 'species', 'hunger', 'computedState'])
+        && request.resource.data.species == 'dog'
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 20;
+
+      // Hunger, computedState, dailyFeedCount — Cloud Functions only (Admin SDK)
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

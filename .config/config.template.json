@@ -1,0 +1,38 @@
+{
+  "_instructions": "Copy this file to config.json and fill in all values. config.json is git-ignored. Never commit config.json.",
+
+  "expo": {
+    "accountName": "YOUR_EXPO_ACCOUNT_NAME",
+    "projectSlug": "pawmii",
+    "projectId": "YOUR_EAS_PROJECT_ID",
+    "accessToken": "YOUR_EXPO_ACCESS_TOKEN"
+  },
+
+  "firebase": {
+    "projectId": "pawmii-app",
+    "appIdAndroid": "YOUR_FIREBASE_ANDROID_APP_ID",
+    "appIdIos": "YOUR_FIREBASE_IOS_APP_ID",
+    "apiKeyAndroid": "YOUR_FIREBASE_ANDROID_API_KEY",
+    "apiKeyIos": "YOUR_FIREBASE_IOS_API_KEY",
+    "authDomain": "pawmii-app.firebaseapp.com",
+    "storageBucket": "pawmii-app.appspot.com",
+    "messagingSenderId": "YOUR_FIREBASE_MESSAGING_SENDER_ID",
+    "measurementId": "YOUR_FIREBASE_MEASUREMENT_ID"
+  },
+
+  "ios": {
+    "bundleIdentifier": "com.lucratech.pawmii",
+    "appleTeamId": "YOUR_APPLE_TEAM_ID",
+    "appStoreConnectAppId": "YOUR_APP_STORE_CONNECT_APP_ID"
+  },
+
+  "android": {
+    "packageName": "com.lucratech.pawmii",
+    "googlePlayServiceAccountKeyPath": ".config/play-service-account.json"
+  },
+
+  "github": {
+    "repo": "YOUR_GITHUB_USERNAME/pawmii",
+    "easBuildWebhookSecret": "YOUR_EAS_WEBHOOK_SECRET"
+  }
+}
