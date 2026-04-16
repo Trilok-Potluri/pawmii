@@ -112,7 +112,10 @@ module.exports = {
       ],
     ],
     updates: {
-      fallbackToCacheTimeout: 0,
+      url: "https://u.expo.dev/b968ca0e-a0aa-48f9-acaa-fc6ba35ac01a",
+    },
+    runtimeVersion: {
+      policy: "appVersion",
     },
     assetBundlePatterns: ["**/*"],
   },
