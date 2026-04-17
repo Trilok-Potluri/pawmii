@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useHealthStore } from '../store/healthStore';
 import { COLORS } from '../utils/theme';
 
@@ -9,20 +9,32 @@ interface Props {
   type: BannerType;
   petName?: string;
   uid?: string | null;
+  onPress?: () => void;
+  loading?: boolean;
 }
 
-export function BannerNotification({ type, petName }: Props) {
+export function BannerNotification({ type, petName, onPress, loading }: Props) {
   const steps = useHealthStore((s) => s.steps);
   const coinsEarnedToday = useHealthStore((s) => s.coinsEarnedToday);
 
   if (type === 'reconnect') {
     return (
-      <View style={[styles.card, styles.reconnectCard]}>
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress || loading}
+        style={({ pressed }) => [
+          styles.card,
+          styles.reconnectCard,
+          pressed && onPress ? { opacity: 0.75 } : null,
+        ]}
+      >
         <Text style={styles.reconnectIcon}>⚡</Text>
         <Text style={styles.reconnectText}>
-          Connect health data to earn coins for {petName ?? 'your dog'}
+          {loading
+            ? 'Opening Health Connect…'
+            : `Tap to connect health data for ${petName ?? 'your dog'}`}
         </Text>
-      </View>
+      </Pressable>
     );
   }
 

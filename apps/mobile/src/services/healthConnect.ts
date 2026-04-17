@@ -27,6 +27,7 @@ export async function isHealthConnectAvailable(): Promise<boolean> {
   const hc = await getHC();
   if (!hc) return false;
   try {
+    await hc.initialize();
     const status = await hc.getSdkStatus();
     // SdkAvailabilityStatus.SDK_AVAILABLE = 3
     return status === 3;
@@ -35,24 +36,58 @@ export async function isHealthConnectAvailable(): Promise<boolean> {
   }
 }
 
+const REQUIRED_PERMISSIONS = [
+  { accessType: "read" as const, recordType: "Steps" as const },
+  { accessType: "read" as const, recordType: "ActiveCaloriesBurned" as const },
+];
+
+function allRequiredGranted(granted: readonly { accessType: string; recordType: string }[]): boolean {
+  return REQUIRED_PERMISSIONS.every((req) =>
+    granted.some(
+      (g) => g.accessType === req.accessType && g.recordType === req.recordType,
+    ),
+  );
+}
+
 /**
- * Requests Health Connect permissions for Steps and Active Calories.
- * Returns true if both are granted.
+ * Requests Health Connect permissions for Steps + Active Calories.
+ * Returns true only if both are granted.
+ *
+ * Throws the underlying native error on failure so the caller can surface it
+ * (e.g. show an Alert). The native error usually means the MainActivity
+ * permission delegate wasn't registered, or Health Connect isn't installed.
  */
 export async function requestHealthConnectPermissions(): Promise<boolean> {
   if (Platform.OS !== "android") return false;
   const hc = await getHC();
   if (!hc) return false;
 
+  await hc.initialize();
+
+  // requestPermission returns the list of granted permissions (no `granted`
+  // field on the items). Cross-check against what we asked for.
+  const granted = await hc.requestPermission([...REQUIRED_PERMISSIONS]);
+  if (allRequiredGranted(granted)) return true;
+
+  // Fallback: some devices return an incomplete array from requestPermission.
+  // Re-check via the dedicated accessor before giving up.
+  const current = await hc.getGrantedPermissions();
+  return allRequiredGranted(current);
+}
+
+/**
+ * Returns true iff Steps + ActiveCaloriesBurned read are already granted.
+ * Does NOT trigger the system UI — use for silent checks on cold start.
+ */
+export async function hasHealthConnectPermissions(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const hc = await getHC();
+  if (!hc) return false;
   try {
     await hc.initialize();
-    const granted = await hc.requestPermission([
-      { accessType: "read", recordType: "Steps" },
-      { accessType: "read", recordType: "ActiveCaloriesBurned" },
-    ]);
-    return granted.every((g: any) => g.granted);
-  } catch (err) {
-    console.error("[HealthConnect] requestPermission error:", err);
+    const current = await hc.getGrantedPermissions();
+    return allRequiredGranted(current);
+  } catch {
     return false;
   }
 }

@@ -9,9 +9,9 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Platform,
   ActivityIndicator,
   Linking,
+  Alert,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -23,11 +23,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useOnboardingStore } from '../store/onboardingStore';
 import { useHealthStore } from '../store/healthStore';
-import { requestHealthPermissions } from '../services/healthKit';
-import {
-  requestHealthConnectPermissions,
-  isHealthConnectAvailable,
-} from '../services/healthConnect';
+import { useUserStore } from '../store/userStore';
+import { connectHealth } from '../services/connectHealth';
+import { updateHealthPermission } from '../services/firestore';
 import { COLORS } from '../utils/theme';
 import type { HealthPermissionStatus } from '@pawmii/shared';
 
@@ -44,6 +42,7 @@ export function OnboardingHealthScreen({ navigation }: Props) {
   const petName = useOnboardingStore((s) => s.petName);
   const setHealthPermissionStatus = useOnboardingStore((s) => s.setHealthPermissionStatus);
   const setPermissionStatus = useHealthStore((s) => s.setPermissionStatus);
+  const uid = useUserStore((s) => s.uid);
   const [loading, setLoading] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const scale = useSharedValue(1);
@@ -53,32 +52,41 @@ export function OnboardingHealthScreen({ navigation }: Props) {
   const finishWithStatus = (status: HealthPermissionStatus) => {
     setHealthPermissionStatus(status);
     setPermissionStatus(status);
+    // Persist the permission outcome so returning users still sync health on
+    // cold start (Zustand state resets every launch — Firestore is the source
+    // of truth here).
+    if (uid) {
+      updateHealthPermission(uid, status === 'granted').catch((err) =>
+        console.error('[OnboardingHealth] updateHealthPermission error:', err),
+      );
+    }
     navigation.navigate('Home');
   };
 
   const handleConnect = async () => {
     setLoading(true);
-    let status: HealthPermissionStatus = 'denied';
-    try {
-      if (Platform.OS === 'ios') {
-        const granted = await requestHealthPermissions();
-        status = granted ? 'granted' : 'denied';
-      } else {
-        const available = await isHealthConnectAvailable();
-        if (!available) {
-          setShowInstallModal(true);
-          setLoading(false);
-          return;
-        }
-        const granted = await requestHealthConnectPermissions();
-        status = granted ? 'granted' : 'denied';
-      }
-    } catch (err) {
-      console.error('[OnboardingHealth] Permission error:', err);
-      status = 'denied';
-    } finally {
-      setLoading(false);
+    const result = await connectHealth();
+    setLoading(false);
+
+    if (result.outcome === 'unavailable') {
+      setShowInstallModal(true);
+      return;
     }
+
+    if (result.outcome === 'error') {
+      Alert.alert(
+        'Could not open Health Connect',
+        `${result.message}\n\nTap "Try again" to retry, or skip and reconnect later from the home screen.`,
+        [
+          { text: 'Skip for now', onPress: () => finishWithStatus('skipped') },
+          { text: 'Try again', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+
+    const status: HealthPermissionStatus =
+      result.outcome === 'granted' ? 'granted' : 'denied';
     finishWithStatus(status);
   };
 

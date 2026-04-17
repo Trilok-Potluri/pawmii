@@ -4,7 +4,7 @@
  * Sets onboarding.completed on first mount. Subscribes to Firestore via onSnapshot.
  */
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   AppState,
   AppStateStatus,
   ScrollView,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -26,8 +28,17 @@ import { useHealth } from '../hooks/useHealth';
 import { useCoins } from '../hooks/useCoins';
 import { useUserStore } from '../store/userStore';
 import { useOnboardingStore } from '../store/onboardingStore';
-import { completeOnboarding } from '../services/firestore';
+import { useHealthStore } from '../store/healthStore';
+import {
+  completeOnboarding,
+  fetchUserDoc,
+  updateHealthPermission,
+} from '../services/firestore';
+import { connectHealth } from '../services/connectHealth';
 import { COLORS } from '../utils/theme';
+
+const HEALTH_CONNECT_PLAY_STORE =
+  'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata';
 
 export function HomeScreen() {
   const uid = useUserStore((s) => s.uid);
@@ -40,18 +51,92 @@ export function HomeScreen() {
   const { coinBalance } = useCoins(uid);
 
   const permissionStatus = useOnboardingStore((s) => s.healthPermissionStatus);
+  const setHealthPermissionStatus = useOnboardingStore((s) => s.setHealthPermissionStatus);
+  const setHealthStorePermission = useHealthStore((s) => s.setPermissionStatus);
+  const syncError = useHealthStore((s) => s.syncError);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  const handleReconnect = useCallback(async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    const result = await connectHealth();
+    setReconnecting(false);
+
+    if (result.outcome === 'unavailable') {
+      Alert.alert(
+        'Health Connect required',
+        'Pawmii needs Health Connect to read your activity data on Android. It is free and takes 30 seconds.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Install',
+            onPress: () => Linking.openURL(HEALTH_CONNECT_PLAY_STORE),
+          },
+        ],
+      );
+      return;
+    }
+
+    if (result.outcome === 'error') {
+      Alert.alert('Could not open Health Connect', result.message);
+      return;
+    }
+
+    if (result.outcome === 'granted') {
+      setHealthPermissionStatus('granted');
+      setHealthStorePermission('granted');
+      if (uid) {
+        updateHealthPermission(uid, true).catch((err) =>
+          console.error('[HomeScreen] updateHealthPermission error:', err),
+        );
+      }
+      syncHealthData();
+    } else {
+      // denied — leave banner in place, don't nag with another alert
+      setHealthPermissionStatus('denied');
+      setHealthStorePermission('denied');
+    }
+  }, [
+    reconnecting,
+    uid,
+    setHealthPermissionStatus,
+    setHealthStorePermission,
+    syncHealthData,
+  ]);
 
   useEffect(() => {
     if (uid && !onboardingCompleted) {
-      completeOnboarding(uid).then(() => setOnboardingCompleted(true));
+      completeOnboarding(uid)
+        .then(() => setOnboardingCompleted(true))
+        .catch((err) => console.error('[HomeScreen] completeOnboarding error:', err));
     }
   }, [uid, onboardingCompleted]);
+
+  // Hydrate health permission status from Firestore on cold start. Zustand
+  // resets on every launch; without this, returning users whose permission
+  // was already granted would never trigger a health sync (because the
+  // status would stay 'unknown' forever).
+  useEffect(() => {
+    if (!uid || permissionStatus !== 'unknown') return;
+    let cancelled = false;
+    fetchUserDoc(uid)
+      .then((doc) => {
+        if (cancelled || !doc) return;
+        // Firestore is the source of truth across launches. Map both outcomes
+        // so the reconnect banner reappears on re-opens if still not granted.
+        setHealthPermissionStatus(doc.healthPermissionGranted ? 'granted' : 'denied');
+      })
+      .catch((err) => console.error('[HomeScreen] fetchUserDoc error:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, permissionStatus, setHealthPermissionStatus]);
 
   const syncHealth = useCallback(() => {
     if (uid && permissionStatus === 'granted') {
       syncHealthData();
     }
-  }, [uid, permissionStatus]);
+  }, [uid, permissionStatus, syncHealthData]);
 
   useEffect(() => {
     syncHealth();
@@ -90,7 +175,21 @@ export function HomeScreen() {
         {/* Reconnect banner */}
         {(permissionStatus === 'denied' || permissionStatus === 'skipped') && (
           <View style={styles.bannerWrap}>
-            <BannerNotification type="reconnect" petName={displayName} />
+            <BannerNotification
+              type="reconnect"
+              petName={displayName}
+              onPress={handleReconnect}
+              loading={reconnecting}
+            />
+          </View>
+        )}
+
+        {/* Sync error banner */}
+        {syncError && (
+          <View style={styles.bannerWrap}>
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>⚠️  {syncError}</Text>
+            </View>
           </View>
         )}
 
@@ -231,5 +330,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(255,95,95,0.1)',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,95,95,0.3)',
+  },
+  errorBannerText: {
+    color: COLORS.sad,
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 18,
   },
 });
