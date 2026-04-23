@@ -8,6 +8,7 @@ import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
   AppState,
   AppStateStatus,
@@ -35,6 +36,8 @@ import {
   updateHealthPermission,
 } from '../services/firestore';
 import { connectHealth } from '../services/connectHealth';
+import { openHealthConnectSettings } from '../services/healthConnect';
+import { signInAnonymously } from '../services/firebase';
 import { COLORS } from '../utils/theme';
 
 const HEALTH_CONNECT_PLAY_STORE =
@@ -42,6 +45,7 @@ const HEALTH_CONNECT_PLAY_STORE =
 
 export function HomeScreen() {
   const uid = useUserStore((s) => s.uid);
+  const setUser = useUserStore((s) => s.setUser);
   const onboardingCompleted = useUserStore((s) => s.onboardingCompleted);
   const setOnboardingCompleted = useUserStore((s) => s.setOnboardingCompleted);
   const petName = useOnboardingStore((s) => s.petName);
@@ -53,8 +57,26 @@ export function HomeScreen() {
   const permissionStatus = useOnboardingStore((s) => s.healthPermissionStatus);
   const setHealthPermissionStatus = useOnboardingStore((s) => s.setHealthPermissionStatus);
   const setHealthStorePermission = useHealthStore((s) => s.setPermissionStatus);
+  const setSyncError = useHealthStore((s) => s.setSyncError);
   const syncError = useHealthStore((s) => s.syncError);
   const [reconnecting, setReconnecting] = useState(false);
+  const [authRetrying, setAuthRetrying] = useState(false);
+
+  const handleAuthRetry = useCallback(async () => {
+    if (authRetrying) return;
+    setAuthRetrying(true);
+    try {
+      const { uid: freshUid } = await signInAnonymously();
+      setUser(freshUid, true);
+      setSyncError(null);
+      // syncHealth will re-run when uid updates in the store
+    } catch (err) {
+      console.error('[HomeScreen] re-auth failed:', err);
+      Alert.alert('Sign-in failed', 'Could not connect to Pawmii servers. Check your internet connection and try again.');
+    } finally {
+      setAuthRetrying(false);
+    }
+  }, [authRetrying, setUser, setSyncError]);
 
   const handleReconnect = useCallback(async () => {
     if (reconnecting) return;
@@ -62,14 +84,19 @@ export function HomeScreen() {
     const result = await connectHealth();
     setReconnecting(false);
 
-    if (result.outcome === 'unavailable') {
+    if (
+      result.outcome === 'unavailable_not_installed' ||
+      result.outcome === 'unavailable_update_required'
+    ) {
       Alert.alert(
-        'Health Connect required',
+        result.outcome === 'unavailable_update_required'
+          ? 'Update Health Connect'
+          : 'Health Connect required',
         'Pawmii needs Health Connect to read your activity data on Android. It is free and takes 30 seconds.',
         [
           { text: 'Not now', style: 'cancel' },
           {
-            text: 'Install',
+            text: 'Open Play Store',
             onPress: () => Linking.openURL(HEALTH_CONNECT_PLAY_STORE),
           },
         ],
@@ -91,11 +118,39 @@ export function HomeScreen() {
         );
       }
       syncHealthData();
-    } else {
-      // denied — leave banner in place, don't nag with another alert
-      setHealthPermissionStatus('denied');
-      setHealthStorePermission('denied');
+      return;
     }
+
+    if (result.outcome === 'needs_settings') {
+      Alert.alert(
+        'Grant access in Health Connect',
+        'Health Connect is blocking new permission requests from Pawmii. Open Health Connect, find Pawmii in App permissions, and enable Steps and Active calories.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Open Health Connect',
+            onPress: () => openHealthConnectSettings(),
+          },
+        ],
+      );
+      // Leave permissionStatus as-is so the banner stays visible.
+      return;
+    }
+
+    // denied — sheet appeared, user said no
+    setHealthPermissionStatus('denied');
+    setHealthStorePermission('denied');
+    Alert.alert(
+      'Permission not granted',
+      'You can grant Steps and Active calories access anytime in Health Connect.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Open Health Connect',
+          onPress: () => openHealthConnectSettings(),
+        },
+      ],
+    );
   }, [
     reconnecting,
     uid,
@@ -185,7 +240,20 @@ export function HomeScreen() {
         )}
 
         {/* Sync error banner */}
-        {syncError && (
+        {syncError === 'auth_error' && (
+          <View style={styles.bannerWrap}>
+            <Pressable
+              style={({ pressed }) => [styles.errorBanner, pressed && { opacity: 0.75 }]}
+              onPress={handleAuthRetry}
+              disabled={authRetrying}
+            >
+              <Text style={styles.errorBannerText}>
+                {authRetrying ? '⏳  Signing in…' : '⚠️  Tap to sign in and sync health data'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+        {syncError && syncError !== 'auth_error' && (
           <View style={styles.bannerWrap}>
             <View style={styles.errorBanner}>
               <Text style={styles.errorBannerText}>⚠️  {syncError}</Text>

@@ -10,16 +10,6 @@ import AppleHealthKit, {
   HealthKitPermissions,
 } from "react-native-health";
 
-const PERMISSIONS: HealthKitPermissions = {
-  permissions: {
-    read: [
-      AppleHealthKit.Constants.Permissions.StepCount,
-      AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
-    ],
-    write: [],
-  },
-};
-
 /**
  * Requests HealthKit permissions.
  * Returns true if granted (iOS always shows the OS sheet; partial grants possible).
@@ -27,8 +17,19 @@ const PERMISSIONS: HealthKitPermissions = {
 export async function requestHealthPermissions(): Promise<boolean> {
   if (Platform.OS !== "ios") return false;
 
+  // Defined here (not module-level) so AppleHealthKit.Constants is never accessed on Android
+  const permissions: HealthKitPermissions = {
+    permissions: {
+      read: [
+        AppleHealthKit.Constants.Permissions.StepCount,
+        AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
+      ],
+      write: [],
+    },
+  };
+
   return new Promise((resolve) => {
-    AppleHealthKit.initHealthKit(PERMISSIONS, (err) => {
+    AppleHealthKit.initHealthKit(permissions, (err) => {
       if (err) {
         console.error("[HealthKit] initHealthKit error:", err);
         resolve(false);

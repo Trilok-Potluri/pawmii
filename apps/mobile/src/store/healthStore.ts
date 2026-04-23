@@ -8,6 +8,7 @@ export const useHealthStore = create<HealthStoreState>((set) => ({
   permissionStatus: "unknown",
   lastSyncedAt: null,
   isSyncing: false,
+  syncError: null,
 
   setPermissionStatus: (status: HealthPermissionStatus) =>
     set({ permissionStatus: status }),
@@ -18,7 +19,10 @@ export const useHealthStore = create<HealthStoreState>((set) => ({
       activeCalories,
       coinsEarnedToday: coins,
       lastSyncedAt: new Date(),
+      syncError: null,
     }),
 
   setIsSyncing: (val) => set({ isSyncing: val }),
+
+  setSyncError: (error) => set({ syncError: error }),
 }));

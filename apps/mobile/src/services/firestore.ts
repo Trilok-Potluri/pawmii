@@ -7,6 +7,7 @@
 import {
   doc,
   setDoc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   collection,
@@ -23,19 +24,24 @@ import type { Pet, UserDoc } from "@pawmii/shared";
 export async function createUserDoc(uid: string): Promise<void> {
   const db = getFirestoreDb();
   const ref = doc(db, "users", uid);
-  await setDoc(
-    ref,
-    {
-      uid,
-      coinBalance: 0,
-      fcmToken: null,
-      healthPermissionGranted: false,
-      onboardingCompleted: false,
-      createdAt: serverTimestamp(),
-      lastActiveAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    // Only update lastActiveAt — never overwrite coinBalance or onboardingCompleted
+    await setDoc(ref, { lastActiveAt: serverTimestamp() }, { merge: true });
+    return;
+  }
+  // NOTE: `coinBalance` is intentionally omitted here. Firestore rules forbid
+  // the client from setting it (Cloud Functions own that field). The
+  // calculateCoins function uses FieldValue.increment which correctly treats a
+  // missing field as 0, so the balance starts at 0 by default.
+  await setDoc(ref, {
+    uid,
+    fcmToken: null,
+    healthPermissionGranted: false,
+    onboardingCompleted: false,
+    createdAt: serverTimestamp(),
+    lastActiveAt: serverTimestamp(),
+  });
 }
 
 export async function completeOnboarding(uid: string): Promise<void> {
@@ -85,6 +91,19 @@ export function subscribeToCoinBalance(
   });
 }
 
+/**
+ * One-shot read of the user document. Returns null if it doesn't exist.
+ * Used by the Home screen to hydrate state that Zustand doesn't persist
+ * (e.g. healthPermissionGranted) after a cold start.
+ */
+export async function fetchUserDoc(uid: string): Promise<UserDoc | null> {
+  const db = getFirestoreDb();
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  return snap.data() as UserDoc;
+}
+
 // ─── Pet Document ─────────────────────────────────────────────────────────────
 
 /**
@@ -98,6 +117,9 @@ export async function createPetDoc(
 ): Promise<void> {
   const db = getFirestoreDb();
   const ref = doc(db, "pets", petId);
+  // Don't overwrite an existing pet — Cloud Functions own hunger/feedCount after creation
+  const existing = await getDoc(ref);
+  if (existing.exists()) return;
   await setDoc(ref, {
     uid,
     name,

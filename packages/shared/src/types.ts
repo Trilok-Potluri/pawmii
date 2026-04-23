@@ -99,9 +99,11 @@ export interface HealthStoreState {
   permissionStatus: HealthPermissionStatus;
   lastSyncedAt: Date | null;
   isSyncing: boolean;
+  syncError: string | null;
   setPermissionStatus: (status: HealthPermissionStatus) => void;
   setHealthData: (steps: number, calories: number, coins: number) => void;
   setIsSyncing: (val: boolean) => void;
+  setSyncError: (error: string | null) => void;
 }
 
 export interface UserStoreState {

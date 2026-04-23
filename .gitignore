@@ -26,6 +26,14 @@ functions/lib/
 .config/GoogleService-Info.plist
 .config/config.json
 
+# Firebase config baked into the Android native build
+apps/mobile/android/app/google-services.json
+
+# Claude Code local state — tokens and worktree artifacts
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
 # BUT keep the template and README in git
 !.config/config.template.json
 !.config/README.md

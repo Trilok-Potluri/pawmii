@@ -1,5 +1,7 @@
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/logger";
+import { getDb } from "./utils/admin";
 import {
   FEED_COST_COINS,
   HUNGER_RESTORE_PER_FEED,
@@ -10,7 +12,6 @@ import {
 } from "@pawmii/shared";
 import type { FeedPetPayload, FeedPetResponse, Pet } from "@pawmii/shared";
 
-const db = admin.firestore();
 
 /**
  * feedPet — HTTP Callable
@@ -29,66 +30,62 @@ const db = admin.firestore();
  *   - Updates lastFedAt server timestamp
  *   - Increments dailyFeedCount
  */
-export const feedPet = functions
-  .region("us-central1")
-  .https.onCall(async (data: FeedPetPayload, context): Promise<FeedPetResponse> => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+export const feedPet = onCall(
+  { region: "us-central1" },
+  async (request): Promise<FeedPetResponse> => {
+    if (!request.auth) {
+      throw new HttpsError(
         "unauthenticated",
         "Must be authenticated to feed a pet."
       );
     }
 
-    const { uid, petId } = data;
+    const { uid, petId } = request.data as FeedPetPayload;
 
-    if (context.auth.uid !== uid) {
-      throw new functions.https.HttpsError("permission-denied", "UID mismatch.");
+    if (request.auth.uid !== uid) {
+      throw new HttpsError("permission-denied", "UID mismatch.");
     }
 
-    const petRef = db.collection("pets").doc(petId);
-    const userRef = db.collection("users").doc(uid);
+    const petRef = getDb().collection("pets").doc(petId);
+    const userRef = getDb().collection("users").doc(uid);
 
     try {
-      const result = await db.runTransaction(async (tx) => {
+      const result = await getDb().runTransaction(async (tx) => {
         const [petSnap, userSnap] = await Promise.all([
           tx.get(petRef),
           tx.get(userRef),
         ]);
 
         if (!petSnap.exists) {
-          throw new functions.https.HttpsError("not-found", "Pet not found.");
+          throw new HttpsError("not-found", "Pet not found.");
         }
 
         const pet = petSnap.data() as Pet;
-        const userData = userSnap.data()!;
+        // User doc may be missing if calculateCoins hasn't run yet (we no
+        // longer initialize coinBalance client-side). Treat it as an
+        // insufficient-coins failure rather than a crash.
+        const userData = userSnap.exists ? userSnap.data()! : {};
 
-        // Verify pet ownership
         if (pet.uid !== uid) {
-          throw new functions.https.HttpsError(
-            "permission-denied",
-            "You do not own this pet."
-          );
+          throw new HttpsError("permission-denied", "You do not own this pet.");
         }
 
-        // Check coin balance
         const coinBalance: number = userData.coinBalance ?? 0;
         if (coinBalance < FEED_COST_COINS) {
-          throw new functions.https.HttpsError(
+          throw new HttpsError(
             "failed-precondition",
             `Insufficient coins. Need ${FEED_COST_COINS}, have ${coinBalance}.`
           );
         }
 
-        // Check daily feed cap
         const dailyFeedCount: number = pet.dailyFeedCount ?? 0;
         if (dailyFeedCount >= DAILY_FEED_CAP) {
-          throw new functions.https.HttpsError(
+          throw new HttpsError(
             "resource-exhausted",
             `Daily feed limit of ${DAILY_FEED_CAP} reached.`
           );
         }
 
-        // Calculate new values
         const newHunger = Math.min(pet.hunger + HUNGER_RESTORE_PER_FEED, HUNGER_MAX);
         const newCoinBalance = coinBalance - FEED_COST_COINS;
         const newState =
@@ -98,7 +95,6 @@ export const feedPet = functions
             ? "neutral"
             : "sad";
 
-        // Apply writes
         tx.update(petRef, {
           hunger: newHunger,
           computedState: newState,
@@ -106,14 +102,13 @@ export const feedPet = functions
           dailyFeedCount: admin.firestore.FieldValue.increment(1),
         });
 
-        tx.update(userRef, {
-          coinBalance: newCoinBalance,
-        });
+        // set+merge so we don't crash if the user doc doesn't exist yet.
+        tx.set(userRef, { coinBalance: newCoinBalance }, { merge: true });
 
         return { newHunger, newCoinBalance };
       });
 
-      functions.logger.info(
+      logger.info(
         `[feedPet] uid=${uid} petId=${petId} newHunger=${result.newHunger} coinBalance=${result.newCoinBalance}`
       );
 
@@ -123,8 +118,9 @@ export const feedPet = functions
         newCoinBalance: result.newCoinBalance,
       };
     } catch (err) {
-      if (err instanceof functions.https.HttpsError) throw err;
-      functions.logger.error("[feedPet] Unexpected error:", err);
-      throw new functions.https.HttpsError("internal", "Feed action failed.");
+      if (err instanceof HttpsError) throw err;
+      logger.error("[feedPet] Unexpected error:", err);
+      throw new HttpsError("internal", "Feed action failed.");
     }
-  });
+  }
+);

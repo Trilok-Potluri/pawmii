@@ -18,22 +18,37 @@ async function getHC() {
   return HC;
 }
 
-/**
- * Checks if Health Connect is available on the device.
- * Returns false on Android < 14 or if not installed.
- */
-export async function isHealthConnectAvailable(): Promise<boolean> {
-  if (Platform.OS !== "android") return false;
+// Mirrors androidx.health.connect.client.HealthConnectClient.SdkAvailabilityStatus
+// 0 = unavailable, 1 = provider update required, 2 = (reserved), 3 = available
+export type HcAvailability =
+  | "available"
+  | "not_installed"
+  | "update_required"
+  | "unknown";
+
+export async function getHealthConnectAvailability(): Promise<HcAvailability> {
+  if (Platform.OS !== "android") return "unknown";
   const hc = await getHC();
-  if (!hc) return false;
+  if (!hc) return "unknown";
   try {
     await hc.initialize();
     const status = await hc.getSdkStatus();
-    // SdkAvailabilityStatus.SDK_AVAILABLE = 3
-    return status === 3;
-  } catch {
-    return false;
+    console.log("[HealthConnect] getSdkStatus =", status);
+    if (status === 3) return "available";
+    if (status === 2) return "update_required";
+    return "not_installed";
+  } catch (err) {
+    console.error("[HealthConnect] getSdkStatus error:", err);
+    return "unknown";
   }
+}
+
+/**
+ * Back-compat helper — true iff HC is available. Prefer
+ * getHealthConnectAvailability() for richer outcomes.
+ */
+export async function isHealthConnectAvailable(): Promise<boolean> {
+  return (await getHealthConnectAvailability()) === "available";
 }
 
 const REQUIRED_PERMISSIONS = [
@@ -41,7 +56,9 @@ const REQUIRED_PERMISSIONS = [
   { accessType: "read" as const, recordType: "ActiveCaloriesBurned" as const },
 ];
 
-function allRequiredGranted(granted: readonly { accessType: string; recordType: string }[]): boolean {
+type GrantedPerm = { accessType: string; recordType: string };
+
+function allRequiredGranted(granted: readonly GrantedPerm[]): boolean {
   return REQUIRED_PERMISSIONS.every((req) =>
     granted.some(
       (g) => g.accessType === req.accessType && g.recordType === req.recordType,
@@ -49,30 +66,82 @@ function allRequiredGranted(granted: readonly { accessType: string; recordType: 
   );
 }
 
+function countRequiredGranted(granted: readonly GrantedPerm[]): number {
+  return REQUIRED_PERMISSIONS.filter((req) =>
+    granted.some(
+      (g) => g.accessType === req.accessType && g.recordType === req.recordType,
+    ),
+  ).length;
+}
+
+export type RequestPermissionOutcome =
+  /** All required permissions are granted. */
+  | { kind: "granted" }
+  /** User saw the UI and declined (at least one required perm missing). */
+  | { kind: "denied"; grantedCount: number }
+  /**
+   * The request resolved but nothing changed AND nothing is granted — Health
+   * Connect silently suppressed the UI (typical after 2+ denies, or when the
+   * system blocks the request). User must grant manually via settings.
+   */
+  | { kind: "needs_settings" }
+  /** Native error while talking to Health Connect. */
+  | { kind: "error"; message: string };
+
 /**
  * Requests Health Connect permissions for Steps + Active Calories.
- * Returns true only if both are granted.
  *
- * Throws the underlying native error on failure so the caller can surface it
- * (e.g. show an Alert). The native error usually means the MainActivity
- * permission delegate wasn't registered, or Health Connect isn't installed.
+ * Distinguishes three failure shapes so the UI can respond appropriately:
+ *   - granted:        everything we need
+ *   - denied:         user interacted with the sheet and declined
+ *   - needs_settings: sheet never appeared (rate-limited or system-suppressed)
+ *   - error:          native call failed
  */
-export async function requestHealthConnectPermissions(): Promise<boolean> {
-  if (Platform.OS !== "android") return false;
+export async function requestHealthConnectPermissions(): Promise<RequestPermissionOutcome> {
+  if (Platform.OS !== "android") {
+    return { kind: "error", message: "Health Connect is Android-only" };
+  }
   const hc = await getHC();
-  if (!hc) return false;
+  if (!hc) return { kind: "error", message: "Module not linked" };
 
-  await hc.initialize();
+  try {
+    await hc.initialize();
 
-  // requestPermission returns the list of granted permissions (no `granted`
-  // field on the items). Cross-check against what we asked for.
-  const granted = await hc.requestPermission([...REQUIRED_PERMISSIONS]);
-  if (allRequiredGranted(granted)) return true;
+    // Snapshot state BEFORE, so we can detect "UI never showed" (nothing
+    // changed AND nothing is granted).
+    const before = (await hc.getGrantedPermissions()) as GrantedPerm[];
+    const beforeCount = countRequiredGranted(before);
+    console.log("[HealthConnect] granted before request:", before);
 
-  // Fallback: some devices return an incomplete array from requestPermission.
-  // Re-check via the dedicated accessor before giving up.
-  const current = await hc.getGrantedPermissions();
-  return allRequiredGranted(current);
+    if (beforeCount === REQUIRED_PERMISSIONS.length) {
+      return { kind: "granted" };
+    }
+
+    const requested = await hc.requestPermission([...REQUIRED_PERMISSIONS]);
+    console.log("[HealthConnect] requestPermission returned:", requested);
+
+    // Some devices return an incomplete array from requestPermission — re-poll
+    // via the dedicated accessor as the authoritative source of truth.
+    const after = (await hc.getGrantedPermissions()) as GrantedPerm[];
+    const afterCount = countRequiredGranted(after);
+    console.log("[HealthConnect] granted after request:", after);
+
+    if (allRequiredGranted(after)) {
+      return { kind: "granted" };
+    }
+
+    // Nothing was granted AND nothing changed vs before → the UI never
+    // appeared. This is the rate-limit / suppression case.
+    if (afterCount === 0 && beforeCount === 0 && requested.length === 0) {
+      return { kind: "needs_settings" };
+    }
+
+    return { kind: "denied", grantedCount: afterCount };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[HealthConnect] requestPermission native error:", err);
+    return { kind: "error", message };
+  }
 }
 
 /**
@@ -85,10 +154,27 @@ export async function hasHealthConnectPermissions(): Promise<boolean> {
   if (!hc) return false;
   try {
     await hc.initialize();
-    const current = await hc.getGrantedPermissions();
+    const current = (await hc.getGrantedPermissions()) as GrantedPerm[];
     return allRequiredGranted(current);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Opens the Health Connect settings screen so the user can grant permissions
+ * manually. This is the escape hatch when requestPermission() is rate-limited
+ * by Android (i.e. after 2 prior denies).
+ */
+export async function openHealthConnectSettings(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  const hc = await getHC();
+  if (!hc) return;
+  try {
+    await hc.initialize();
+    hc.openHealthConnectSettings();
+  } catch (err) {
+    console.error("[HealthConnect] openHealthConnectSettings error:", err);
   }
 }
 

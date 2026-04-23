@@ -33,6 +33,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function OnboardingWelcomeScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const setUser = useUserStore((s) => s.setUser);
   const scale = useSharedValue(1);
 
@@ -40,17 +41,32 @@ export function OnboardingWelcomeScreen({ navigation }: Props) {
 
   const handleGetStarted = async () => {
     setLoading(true);
+    setError(null);
+    let uid: string;
     try {
-      const { uid } = await signInAnonymously();
-      setUser(uid, true);
-      // Create the user document in Firestore (idempotent — merge:true)
-      await createUserDoc(uid);
-      navigation.navigate('OnboardingNameDog');
-    } catch (err) {
+      const result = await signInAnonymously();
+      uid = result.uid;
+    } catch (err: any) {
       console.error('[OnboardingWelcome] Auth error:', err);
-    } finally {
       setLoading(false);
+      const code = err?.code ?? '';
+      if (code === 'auth/operation-not-allowed') {
+        setError('Anonymous sign-in is not enabled. Please contact support.');
+      } else if (code === 'auth/network-request-failed') {
+        setError('No internet connection. Please check your network and try again.');
+      } else {
+        setError('Could not sign in. Please try again.');
+      }
+      return;
     }
+    try {
+      setUser(uid, true);
+      await createUserDoc(uid);
+    } catch (err) {
+      console.error('[OnboardingWelcome] Firestore error:', err);
+    }
+    setLoading(false);
+    navigation.navigate('OnboardingNameDog');
   };
 
   return (
@@ -108,6 +124,7 @@ export function OnboardingWelcomeScreen({ navigation }: Props) {
             )}
           </AnimatedPressable>
           <Text style={styles.legal}>No account needed · Free forever</Text>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
       </SafeAreaView>
     </View>
@@ -242,5 +259,11 @@ const styles = StyleSheet.create({
   legal: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

@@ -1,7 +1,6 @@
-import * as functions from "firebase-functions";
-import * as admin from "firebase-admin";
-
-const db = admin.firestore();
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { logger } from "firebase-functions/logger";
+import { getDb } from "./utils/admin";
 
 /**
  * dailyReset — Scheduled Cloud Function
@@ -12,25 +11,22 @@ const db = admin.firestore();
  *
  * Without this, the daily cap becomes a permanent lifetime cap after day 1.
  */
-export const dailyReset = functions
-  .region("us-central1")
-  .pubsub.schedule("0 0 * * *")
-  .timeZone("UTC")
-  .onRun(async () => {
-    const petsSnap = await db.collection("pets").get();
+export const dailyReset = onSchedule(
+  { schedule: "0 0 * * *", timeZone: "UTC", region: "us-central1" },
+  async () => {
+    const petsSnap = await getDb().collection("pets").get();
 
     if (petsSnap.empty) {
-      functions.logger.info("[dailyReset] No pets to reset.");
-      return null;
+      logger.info("[dailyReset] No pets to reset.");
+      return;
     }
 
-    // Write in batches of 500 (Firestore batch limit)
     const BATCH_SIZE = 500;
     const docs = petsSnap.docs;
     let resetCount = 0;
 
     for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-      const batch = db.batch();
+      const batch = getDb().batch();
       const chunk = docs.slice(i, i + BATCH_SIZE);
       chunk.forEach((doc) => {
         batch.update(doc.ref, { dailyFeedCount: 0 });
@@ -39,6 +35,6 @@ export const dailyReset = functions
       resetCount += chunk.length;
     }
 
-    functions.logger.info(`[dailyReset] Reset dailyFeedCount for ${resetCount} pets.`);
-    return null;
-  });
+    logger.info(`[dailyReset] Reset dailyFeedCount for ${resetCount} pets.`);
+  }
+);

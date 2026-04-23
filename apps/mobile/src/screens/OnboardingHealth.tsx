@@ -25,6 +25,7 @@ import { useOnboardingStore } from '../store/onboardingStore';
 import { useHealthStore } from '../store/healthStore';
 import { useUserStore } from '../store/userStore';
 import { connectHealth } from '../services/connectHealth';
+import { openHealthConnectSettings } from '../services/healthConnect';
 import { updateHealthPermission } from '../services/firestore';
 import { COLORS } from '../utils/theme';
 import type { HealthPermissionStatus } from '@pawmii/shared';
@@ -68,7 +69,10 @@ export function OnboardingHealthScreen({ navigation }: Props) {
     const result = await connectHealth();
     setLoading(false);
 
-    if (result.outcome === 'unavailable') {
+    if (
+      result.outcome === 'unavailable_not_installed' ||
+      result.outcome === 'unavailable_update_required'
+    ) {
       setShowInstallModal(true);
       return;
     }
@@ -85,9 +89,46 @@ export function OnboardingHealthScreen({ navigation }: Props) {
       return;
     }
 
-    const status: HealthPermissionStatus =
-      result.outcome === 'granted' ? 'granted' : 'denied';
-    finishWithStatus(status);
+    if (result.outcome === 'granted') {
+      finishWithStatus('granted');
+      return;
+    }
+
+    // needs_settings: Android rate-limited the permission sheet (usually after
+    // 2+ prior denies). The only way forward is the HC settings app.
+    if (result.outcome === 'needs_settings') {
+      Alert.alert(
+        'Grant access in Health Connect',
+        'Health Connect is blocking new permission requests from Pawmii. Open Health Connect, find Pawmii in App permissions, and enable Steps and Active calories.',
+        [
+          { text: 'Skip for now', onPress: () => finishWithStatus('skipped') },
+          {
+            text: 'Open Health Connect',
+            onPress: () => {
+              openHealthConnectSettings();
+              // Leave the user on this screen so they can tap "Connect" again
+              // after granting. Don't persist "denied" in this path.
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    // Plain denied — user saw the sheet and declined. Offer a direct path to
+    // settings so they can change their mind without rebuilding.
+    Alert.alert(
+      'Permission not granted',
+      `${petName ?? 'Your dog'} needs Steps and Active calories to earn coins. You can grant these anytime from Health Connect.`,
+      [
+        { text: 'Skip for now', onPress: () => finishWithStatus('denied') },
+        {
+          text: 'Open Health Connect',
+          onPress: () => openHealthConnectSettings(),
+        },
+        { text: 'Try again', style: 'cancel' },
+      ],
+    );
   };
 
   return (

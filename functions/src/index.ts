@@ -1,6 +1,6 @@
 /**
  * Pawmii Cloud Functions — Entry Point
- * Node 20 | Firebase Functions v4 | us-central1
+ * Node 22 | Firebase Functions v2 | us-central1
  */
 
 import * as admin from "firebase-admin";

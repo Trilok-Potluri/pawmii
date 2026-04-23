@@ -1,5 +1,7 @@
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/logger";
+import { getDb } from "./utils/admin";
 import {
   COINS_PER_1000_STEPS,
   COINS_PER_100_CALORIES,
@@ -11,7 +13,6 @@ import {
 import type { CalculateCoinsPayload, HealthLog } from "@pawmii/shared";
 import { getHealthLogRef, getTodayDateString } from "./utils/firestore";
 
-const db = admin.firestore();
 
 /**
  * calculateCoins — HTTP Callable
@@ -21,37 +22,31 @@ const db = admin.firestore();
  * Calculates coins, enforces daily cap, writes authoritative record to Firestore.
  * Client NEVER writes coin values — this function is the only writer.
  */
-export const calculateCoins = functions
-  .region("us-central1")
-  .https.onCall(async (data: CalculateCoinsPayload, context) => {
-    // Auth check
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
+export const calculateCoins = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
         "unauthenticated",
         "Must be authenticated to calculate coins."
       );
     }
 
+    const data = request.data as CalculateCoinsPayload;
     const { uid, date, steps, activeCalories, timezone } = data;
 
-    // Validate caller matches UID in payload
-    if (context.auth.uid !== uid) {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "UID mismatch."
-      );
+    if (request.auth.uid !== uid) {
+      throw new HttpsError("permission-denied", "UID mismatch.");
     }
 
-    // Validate date matches today in the user's timezone
     const todayForUser = getTodayDateString(timezone);
     if (date !== todayForUser) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "invalid-argument",
         `Date ${date} does not match today (${todayForUser}) in timezone ${timezone}.`
       );
     }
 
-    // Calculate coins — server side only
     const effectiveSteps = Math.min(steps, STEPS_COIN_CAP);
     const effectiveCalories = Math.min(activeCalories, CALORIES_COIN_CAP);
 
@@ -65,10 +60,10 @@ export const calculateCoins = functions
       DAILY_COIN_CAP
     );
 
-    const healthLogRef = getHealthLogRef(db, uid, date);
-    const userRef = db.collection("users").doc(uid);
+    const healthLogRef = getHealthLogRef(getDb(), uid, date);
+    const userRef = getDb().collection("users").doc(uid);
 
-    await db.runTransaction(async (tx) => {
+    await getDb().runTransaction(async (tx) => {
       const existingLog = await tx.get(healthLogRef);
       const previousCoinsToday = existingLog.exists
         ? (existingLog.data() as HealthLog).coinsEarned
@@ -76,7 +71,6 @@ export const calculateCoins = functions
 
       const coinDelta = totalCoinsToday - previousCoinsToday;
 
-      // Write updated health log
       const healthLogData: HealthLog = {
         date,
         steps,
@@ -86,18 +80,21 @@ export const calculateCoins = functions
       };
       tx.set(healthLogRef, healthLogData, { merge: true });
 
-      // Increment coin balance by delta (only add new coins earned today)
       if (coinDelta > 0) {
-        tx.update(userRef, {
-          coinBalance: admin.firestore.FieldValue.increment(coinDelta),
-        });
+        // Use set+merge instead of update so this doesn't fail if user doc is missing
+        tx.set(
+          userRef,
+          { coinBalance: admin.firestore.FieldValue.increment(coinDelta) },
+          { merge: true }
+        );
       }
     });
 
-    functions.logger.info(`[calculateCoins] uid=${uid} date=${date} steps=${steps} cals=${activeCalories} coins=${totalCoinsToday}`);
+    logger.info(`[calculateCoins] uid=${uid} date=${date} steps=${steps} cals=${activeCalories} coins=${totalCoinsToday}`);
 
     return {
       coinsEarnedToday: totalCoinsToday,
       breakdown: { stepsCoins, calorieCoins, bonus },
     };
-  });
+  }
+);

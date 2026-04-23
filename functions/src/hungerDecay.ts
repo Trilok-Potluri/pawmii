@@ -1,5 +1,7 @@
-import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import { onSchedule } from "firebase-functions/v2/scheduler";
+import { logger } from "firebase-functions/logger";
+import { getDb, getMessaging } from "./utils/admin";
 import {
   HUNGER_DECAY_PER_RUN,
   HUNGER_MIN,
@@ -11,8 +13,6 @@ import {
 } from "@pawmii/shared";
 import type { Pet } from "@pawmii/shared";
 
-const db = admin.firestore();
-const messaging = admin.messaging();
 
 /**
  * hungerDecay — Scheduled Cloud Function
@@ -25,19 +25,17 @@ const messaging = admin.messaging();
  *   4. Sends FCM push if hunger just crossed below threshold
  *      (and cooldown has elapsed)
  */
-export const hungerDecay = functions
-  .region("us-central1")
-  .pubsub.schedule(HUNGER_DECAY_SCHEDULE)
-  .timeZone("UTC")
-  .onRun(async () => {
-    const petsSnap = await db.collection("pets").get();
+export const hungerDecay = onSchedule(
+  { schedule: HUNGER_DECAY_SCHEDULE, timeZone: "UTC", region: "us-central1" },
+  async () => {
+    const petsSnap = await getDb().collection("pets").get();
 
     if (petsSnap.empty) {
-      functions.logger.info("[hungerDecay] No pets found.");
-      return null;
+      logger.info("[hungerDecay] No pets found.");
+      return;
     }
 
-    const batch = db.batch();
+    const batch = getDb().batch();
     const notificationPromises: Promise<void>[] = [];
 
     petsSnap.forEach((doc) => {
@@ -53,7 +51,6 @@ export const hungerDecay = functions
         computedState: newState,
       });
 
-      // Trigger notification if crossing the sad threshold for the first time
       const crossedThreshold =
         prevHunger >= HUNGER_NOTIFY_THRESHOLD &&
         newHunger < HUNGER_NOTIFY_THRESHOLD;
@@ -68,18 +65,18 @@ export const hungerDecay = functions
     await batch.commit();
     await Promise.allSettled(notificationPromises);
 
-    functions.logger.info(
+    logger.info(
       `[hungerDecay] Decayed ${petsSnap.size} pets by ${HUNGER_DECAY_PER_RUN} pts.`
     );
-    return null;
-  });
+  }
+);
 
 /**
  * Sends a single FCM push notification if the user has a valid token
  * and hasn't received a hunger notification within the cooldown window.
  */
 async function sendHungerNotification(uid: string, petName: string): Promise<void> {
-  const userRef = db.collection("users").doc(uid);
+  const userRef = getDb().collection("users").doc(uid);
   const userSnap = await userRef.get();
 
   if (!userSnap.exists) return;
@@ -88,14 +85,13 @@ async function sendHungerNotification(uid: string, petName: string): Promise<voi
   const fcmToken: string | null = userData.fcmToken ?? null;
   if (!fcmToken) return;
 
-  // Cooldown check
   const lastNotifiedAt: admin.firestore.Timestamp | null =
     userData.lastHungerNotifiedAt ?? null;
   if (lastNotifiedAt) {
     const minutesSinceLast =
       (Date.now() - lastNotifiedAt.toMillis()) / 60_000;
     if (minutesSinceLast < HUNGER_NOTIFY_COOLDOWN_MINUTES) {
-      functions.logger.info(
+      logger.info(
         `[sendHungerNotification] Cooldown active for uid=${uid}, skipping.`
       );
       return;
@@ -125,12 +121,12 @@ async function sendHungerNotification(uid: string, petName: string): Promise<voi
   };
 
   try {
-    await messaging.send(message);
+    await getMessaging().send(message);
     await userRef.update({
       lastHungerNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    functions.logger.info(`[sendHungerNotification] Sent to uid=${uid}`);
+    logger.info(`[sendHungerNotification] Sent to uid=${uid}`);
   } catch (err) {
-    functions.logger.error(`[sendHungerNotification] Failed for uid=${uid}:`, err);
+    logger.error(`[sendHungerNotification] Failed for uid=${uid}:`, err);
   }
 }
