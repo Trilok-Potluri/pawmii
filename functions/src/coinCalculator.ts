@@ -11,7 +11,7 @@ import {
   CALORIES_COIN_CAP,
 } from "@pawmii/shared";
 import type { CalculateCoinsPayload, HealthLog } from "@pawmii/shared";
-import { getHealthLogRef, getTodayDateString } from "./utils/firestore";
+import { getHealthLogRef, getTodayDateString, getYesterdayDateString } from "./utils/firestore";
 
 
 /**
@@ -39,11 +39,12 @@ export const calculateCoins = onCall(
       throw new HttpsError("permission-denied", "UID mismatch.");
     }
 
-    const todayForUser = getTodayDateString(timezone);
-    if (date !== todayForUser) {
+    const todayForUser     = getTodayDateString(timezone);
+    const yesterdayForUser = getYesterdayDateString(timezone);
+    if (date !== todayForUser && date !== yesterdayForUser) {
       throw new HttpsError(
         "invalid-argument",
-        `Date ${date} does not match today (${todayForUser}) in timezone ${timezone}.`
+        `Date ${date} is not today (${todayForUser}) or yesterday (${yesterdayForUser}) in timezone ${timezone}.`
       );
     }
 

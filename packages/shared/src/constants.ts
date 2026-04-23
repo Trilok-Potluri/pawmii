@@ -25,46 +25,66 @@ export const STEPS_COIN_CAP = 20_000;
 /** Calories cap that contributes to coins (2,500 cal = 200 coins) */
 export const CALORIES_COIN_CAP = 2_500;
 
-// ─── Pet Mechanics ───────────────────────────────────────────────────────────
+// ─── Shared Attribute Bounds ──────────────────────────────────────────────────
 
-/** Hunger points lost per scheduled Cloud Function run (every 30 min) */
-export const HUNGER_DECAY_PER_RUN = 4; // = 8 pts/hr effective rate
+/** Maximum value for any pet attribute */
+export const ATTR_MAX = 100;
 
-/** Hunger points restored per feed action */
+/** Minimum value for any pet attribute (floor) */
+export const ATTR_MIN = 0;
+
+/** Attribute level above which the dog is Happy */
+export const ATTR_HAPPY_THRESHOLD = 60;
+
+/** Attribute level below which the dog is Sad */
+export const ATTR_SAD_THRESHOLD = 30;
+
+// ─── Hunger ──────────────────────────────────────────────────────────────────
+
+/** Points lost per scheduled run (every 30 min) → 8 pts/hr, empty in ~12.5h */
+export const HUNGER_DECAY_PER_RUN = 4;
+
+/** Points restored per feed action */
 export const HUNGER_RESTORE_PER_FEED = 30;
 
 /** Cost in coins per feed action */
 export const FEED_COST_COINS = 20;
 
-/** Max hunger value */
-export const HUNGER_MAX = 100;
-
-/** Min hunger value (floor) */
-export const HUNGER_MIN = 0;
-
 /** Daily feed action cap per pet */
 export const DAILY_FEED_CAP = 10;
 
-// ─── Hunger State Thresholds ─────────────────────────────────────────────────
+// ─── Playfulness ─────────────────────────────────────────────────────────────
 
-/** Hunger level above which dog is Happy */
-export const HUNGER_HAPPY_THRESHOLD = 60;
+/** Points lost per scheduled run (every 30 min) → 4 pts/hr, empty in ~25h */
+export const PLAYFULNESS_DECAY_PER_RUN = 2;
 
-/** Hunger level below which dog is Sad */
-export const HUNGER_SAD_THRESHOLD = 30;
+/** Points restored per play action */
+export const PLAYFULNESS_RESTORE_PER_PLAY = 30;
 
-// ─── Push Notification ───────────────────────────────────────────────────────
+/** Cost in coins per play action */
+export const PLAY_COST_COINS = 15;
 
-/** Hunger threshold that triggers push notification */
-export const HUNGER_NOTIFY_THRESHOLD = 30;
+/** Daily play action cap per pet */
+export const DAILY_PLAY_CAP = 10;
 
-/** Minimum minutes between hunger notifications per user */
-export const HUNGER_NOTIFY_COOLDOWN_MINUTES = 360; // 6 hours
+// ─── Cleanliness ─────────────────────────────────────────────────────────────
+
+/** Points lost per scheduled run (every 30 min) → 2 pts/hr, empty in ~50h */
+export const CLEANLINESS_DECAY_PER_RUN = 1;
+
+/** Points restored per bathe action */
+export const CLEANLINESS_RESTORE_PER_BATHE = 30;
+
+/** Cost in coins per bathe action */
+export const BATHE_COST_COINS = 10;
+
+/** Daily bathe action cap per pet */
+export const DAILY_BATHE_CAP = 10;
 
 // ─── Cloud Function Schedule ─────────────────────────────────────────────────
 
-/** Cron expression for the hunger decay scheduler (every 30 min) */
-export const HUNGER_DECAY_SCHEDULE = "every 30 minutes";
+/** Cron expression for the pet attribute decay scheduler (every 30 min) */
+export const PET_DECAY_SCHEDULE = "every 30 minutes";
 
 // ─── App Constants ───────────────────────────────────────────────────────────
 

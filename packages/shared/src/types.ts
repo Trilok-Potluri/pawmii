@@ -14,11 +14,17 @@ export interface Pet {
   uid: string;
   name: string;
   species: PetSpecies;
-  hunger: number; // 0–100, decays server-side
+  hunger: number;      // 0–100, decays 4 pts/run (server-side)
+  playfulness: number; // 0–100, decays 2 pts/run (server-side)
+  cleanliness: number; // 0–100, decays 1 pt/run  (server-side)
   lastFedAt: FirestoreTimestamp | null;
-  computedState: PetComputedState;
+  lastPlayedAt: FirestoreTimestamp | null;
+  lastBathedAt: FirestoreTimestamp | null;
+  computedState: PetComputedState; // driven by min(hunger, playfulness, cleanliness)
   createdAt: FirestoreTimestamp;
-  dailyFeedCount: number; // resets at midnight
+  dailyFeedCount: number;  // resets at midnight
+  dailyPlayCount: number;  // resets at midnight
+  dailyBatheCount: number; // resets at midnight
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -72,6 +78,36 @@ export interface FeedPetResponse {
   error?: string;
 }
 
+/** POST payload to playWithPet Cloud Function */
+export interface PlayPetPayload {
+  uid: string;
+  petId: string;
+  timestamp: string; // ISO 8601
+}
+
+/** Response from playWithPet Cloud Function */
+export interface PlayPetResponse {
+  success: boolean;
+  newPlayfulness: number;
+  newCoinBalance: number;
+  error?: string;
+}
+
+/** POST payload to bathePet Cloud Function */
+export interface BathePetPayload {
+  uid: string;
+  petId: string;
+  timestamp: string; // ISO 8601
+}
+
+/** Response from bathePet Cloud Function */
+export interface BathePetResponse {
+  success: boolean;
+  newCleanliness: number;
+  newCoinBalance: number;
+  error?: string;
+}
+
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 export interface OnboardingState {
@@ -89,6 +125,10 @@ export interface PetStoreState {
   setPet: (pet: Pet) => void;
   optimisticFeed: () => void;
   rollbackFeed: () => void;
+  optimisticPlay: () => void;
+  rollbackPlay: () => void;
+  optimisticBathe: () => void;
+  rollbackBathe: () => void;
   reset: () => void;
 }
 

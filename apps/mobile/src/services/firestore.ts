@@ -124,11 +124,17 @@ export async function createPetDoc(
     uid,
     name,
     species: "dog",
-    hunger: 70,
-    computedState: "happy",
-    lastFedAt: null,
-    createdAt: serverTimestamp(),
-    dailyFeedCount: 0,
+    hunger:      70,
+    playfulness: 70,
+    cleanliness: 70,
+    computedState:   "happy",
+    lastFedAt:    null,
+    lastPlayedAt: null,
+    lastBathedAt: null,
+    createdAt:       serverTimestamp(),
+    dailyFeedCount:  0,
+    dailyPlayCount:  0,
+    dailyBatheCount: 0,
   });
 }
 

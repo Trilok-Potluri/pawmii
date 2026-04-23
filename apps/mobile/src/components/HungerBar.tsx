@@ -1,17 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../utils/theme';
-import { HUNGER_HAPPY_THRESHOLD, HUNGER_SAD_THRESHOLD } from '@pawmii/shared';
+import { ATTR_HAPPY_THRESHOLD, ATTR_SAD_THRESHOLD } from '@pawmii/shared';
 
 interface Props {
   hunger: number; // 0–100
 }
 
 const getConfig = (hunger: number) => {
-  if (hunger > HUNGER_HAPPY_THRESHOLD) {
+  if (hunger > ATTR_HAPPY_THRESHOLD) {
     return { color: COLORS.happy, bg: COLORS.happyBg, label: 'Full', emoji: '😋' };
   }
-  if (hunger >= HUNGER_SAD_THRESHOLD) {
+  if (hunger >= ATTR_SAD_THRESHOLD) {
     return { color: COLORS.neutral, bg: COLORS.neutralBg, label: 'Peckish', emoji: '😐' };
   }
   return { color: COLORS.sad, bg: COLORS.sadBg, label: 'Hungry!', emoji: '😢' };

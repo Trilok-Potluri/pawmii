@@ -29,16 +29,18 @@ service cloud.firestore {
       // Owner can read their own pet
       allow read: if request.auth != null && resource.data.uid == request.auth.uid;
 
-      // Client can create a pet during onboarding with required fields only
+      // Client can create a pet during onboarding.
+      // All three attribute fields (hunger, playfulness, cleanliness) are included.
+      // Attribute values and daily counts are managed by Cloud Functions after creation.
       allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.keys().hasAll(['uid', 'name', 'species', 'hunger', 'computedState'])
+        && request.resource.data.keys().hasAll(['uid', 'name', 'species', 'hunger', 'playfulness', 'cleanliness', 'computedState'])
         && request.resource.data.species == 'dog'
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 1
         && request.resource.data.name.size() <= 20;
 
-      // Hunger, computedState, dailyFeedCount — Cloud Functions only (Admin SDK)
+      // All mutations after creation are Cloud Functions only (Admin SDK bypasses rules)
       allow update: if false;
       allow delete: if false;
     }

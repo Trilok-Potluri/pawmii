@@ -4,8 +4,16 @@ import * as admin from "firebase-admin";
  * Returns today's date string in "YYYY-MM-DD" format for a given timezone.
  */
 export function getTodayDateString(timezone: string): string {
-  const now = new Date();
-  return now.toLocaleDateString("en-CA", { timeZone: timezone }); // "en-CA" gives YYYY-MM-DD
+  return new Date().toLocaleDateString("en-CA", { timeZone: timezone });
+}
+
+/**
+ * Returns yesterday's date string in "YYYY-MM-DD" format for a given timezone.
+ * Used to accept late-written health data (e.g. Whoop writes at 11:59 PM).
+ */
+export function getYesterdayDateString(timezone: string): string {
+  const yesterday = new Date(Date.now() - 86_400_000);
+  return yesterday.toLocaleDateString("en-CA", { timeZone: timezone });
 }
 
 /**

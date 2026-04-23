@@ -5,10 +5,10 @@ import { getDb } from "./utils/admin";
 import {
   FEED_COST_COINS,
   HUNGER_RESTORE_PER_FEED,
-  HUNGER_MAX,
+  ATTR_MAX,
   DAILY_FEED_CAP,
-  HUNGER_HAPPY_THRESHOLD,
-  HUNGER_SAD_THRESHOLD,
+  ATTR_HAPPY_THRESHOLD,
+  ATTR_SAD_THRESHOLD,
 } from "@pawmii/shared";
 import type { FeedPetPayload, FeedPetResponse, Pet } from "@pawmii/shared";
 
@@ -86,14 +86,11 @@ export const feedPet = onCall(
           );
         }
 
-        const newHunger = Math.min(pet.hunger + HUNGER_RESTORE_PER_FEED, HUNGER_MAX);
+        const newHunger = Math.min(pet.hunger + HUNGER_RESTORE_PER_FEED, ATTR_MAX);
         const newCoinBalance = coinBalance - FEED_COST_COINS;
+        const lowest = Math.min(newHunger, pet.playfulness ?? 0, pet.cleanliness ?? 0);
         const newState =
-          newHunger > HUNGER_HAPPY_THRESHOLD
-            ? "happy"
-            : newHunger >= HUNGER_SAD_THRESHOLD
-            ? "neutral"
-            : "sad";
+          lowest > ATTR_HAPPY_THRESHOLD ? "happy" : lowest >= ATTR_SAD_THRESHOLD ? "neutral" : "sad";
 
         tx.update(petRef, {
           hunger: newHunger,
