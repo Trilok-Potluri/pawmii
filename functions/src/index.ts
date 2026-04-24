@@ -10,7 +10,7 @@ admin.initializeApp();
 
 // Export all functions
 export { calculateCoins } from "./coinCalculator";
-export { hungerDecay }    from "./hungerDecay";
+export { petDecay }       from "./hungerDecay";
 export { feedPet }        from "./feedPet";
 export { playWithPet }    from "./playWithPet";
 export { bathePet }       from "./bathePet";

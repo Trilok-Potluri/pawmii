@@ -128,9 +128,7 @@ module.exports = {
     updates: {
       url: "https://u.expo.dev/b968ca0e-a0aa-48f9-acaa-fc6ba35ac01a",
     },
-    runtimeVersion: {
-      policy: "appVersion",
-    },
+    runtimeVersion: "1.0.0",
     assetBundlePatterns: ["**/*"],
   },
 };

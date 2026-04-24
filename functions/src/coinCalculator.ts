@@ -39,8 +39,22 @@ export const calculateCoins = onCall(
       throw new HttpsError("permission-denied", "UID mismatch.");
     }
 
-    const todayForUser     = getTodayDateString(timezone);
-    const yesterdayForUser = getYesterdayDateString(timezone);
+    if (
+      typeof steps !== "number" || !isFinite(steps) || steps < 0 ||
+      typeof activeCalories !== "number" || !isFinite(activeCalories) || activeCalories < 0
+    ) {
+      throw new HttpsError("invalid-argument", "steps and activeCalories must be non-negative finite numbers.");
+    }
+
+    let todayForUser: string;
+    let yesterdayForUser: string;
+    try {
+      todayForUser     = getTodayDateString(timezone);
+      yesterdayForUser = getYesterdayDateString(timezone);
+    } catch {
+      throw new HttpsError("invalid-argument", `Invalid timezone: "${timezone}".`);
+    }
+
     if (date !== todayForUser && date !== yesterdayForUser) {
       throw new HttpsError(
         "invalid-argument",

@@ -1,3 +1,4 @@
+import * as admin from "firebase-admin";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/logger";
 import { getDb } from "./utils/admin";
@@ -29,7 +30,7 @@ function computeState(hunger: number, playfulness: number, cleanliness: number):
  *   - Cleanliness decays 1 pt/run  (2 pts/hr → empty ~50h)
  *   - computedState is driven by min(hunger, playfulness, cleanliness)
  */
-export const hungerDecay = onSchedule(
+export const petDecay = onSchedule(
   { schedule: PET_DECAY_SCHEDULE, timeZone: "UTC", region: "us-central1" },
   async () => {
     const petsSnap = await getDb().collection("pets").get();
@@ -44,15 +45,17 @@ export const hungerDecay = onSchedule(
     petsSnap.forEach((doc) => {
       const pet = doc.data() as Pet;
 
-      const newHunger      = Math.max((pet.hunger      ?? ATTR_MAX) - HUNGER_DECAY_PER_RUN,      ATTR_MIN);
-      const newPlayfulness = Math.max((pet.playfulness  ?? ATTR_MAX) - PLAYFULNESS_DECAY_PER_RUN, ATTR_MIN);
-      const newCleanliness = Math.max((pet.cleanliness  ?? ATTR_MAX) - CLEANLINESS_DECAY_PER_RUN, ATTR_MIN);
-      const newState       = computeState(newHunger, newPlayfulness, newCleanliness);
+      // Compute projected values from pre-read snapshot for computedState only.
+      // Attributes use FieldValue.increment so concurrent action writes aren't clobbered.
+      const projectedHunger      = Math.max((pet.hunger      ?? ATTR_MAX) - HUNGER_DECAY_PER_RUN,      ATTR_MIN);
+      const projectedPlayfulness = Math.max((pet.playfulness  ?? ATTR_MAX) - PLAYFULNESS_DECAY_PER_RUN, ATTR_MIN);
+      const projectedCleanliness = Math.max((pet.cleanliness  ?? ATTR_MAX) - CLEANLINESS_DECAY_PER_RUN, ATTR_MIN);
+      const newState             = computeState(projectedHunger, projectedPlayfulness, projectedCleanliness);
 
       batch.update(doc.ref, {
-        hunger:      newHunger,
-        playfulness: newPlayfulness,
-        cleanliness: newCleanliness,
+        hunger:        admin.firestore.FieldValue.increment(-HUNGER_DECAY_PER_RUN),
+        playfulness:   admin.firestore.FieldValue.increment(-PLAYFULNESS_DECAY_PER_RUN),
+        cleanliness:   admin.firestore.FieldValue.increment(-CLEANLINESS_DECAY_PER_RUN),
         computedState: newState,
       });
     });

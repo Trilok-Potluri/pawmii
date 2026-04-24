@@ -35,7 +35,7 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
 
   optimisticFeed: () => {
     const { pet } = get();
-    if (!pet) return;
+    if (!pet || _petBeforeFeed !== null) return;
     _petBeforeFeed  = { ...pet };
     _coinsBeforeFeed = useUserStore.getState().coinBalance;
     const newHunger = Math.min(pet.hunger + HUNGER_RESTORE_PER_FEED, ATTR_MAX);
@@ -57,7 +57,7 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
 
   optimisticPlay: () => {
     const { pet } = get();
-    if (!pet) return;
+    if (!pet || _petBeforePlay !== null) return;
     _petBeforePlay  = { ...pet };
     _coinsBeforePlay = useUserStore.getState().coinBalance;
     const newPlayfulness = Math.min((pet.playfulness ?? 0) + PLAYFULNESS_RESTORE_PER_PLAY, ATTR_MAX);
@@ -79,7 +79,7 @@ export const usePetStore = create<PetStoreState>((set, get) => ({
 
   optimisticBathe: () => {
     const { pet } = get();
-    if (!pet) return;
+    if (!pet || _petBeforeBathe !== null) return;
     _petBeforeBathe  = { ...pet };
     _coinsBeforeBathe = useUserStore.getState().coinBalance;
     const newCleanliness = Math.min((pet.cleanliness ?? 0) + CLEANLINESS_RESTORE_PER_BATHE, ATTR_MAX);

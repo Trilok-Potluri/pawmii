@@ -43,6 +43,11 @@ import {
   BATHE_COST_COINS,
   ATTR_HAPPY_THRESHOLD,
   ATTR_SAD_THRESHOLD,
+  STEPS_COIN_CAP,
+  COINS_PER_1000_STEPS,
+  CALORIES_COIN_CAP,
+  COINS_PER_100_CALORIES,
+  DAILY_BOTH_METRICS_BONUS,
 } from '@pawmii/shared';
 
 const HEALTH_CONNECT_PLAY_STORE =
@@ -187,8 +192,9 @@ function CoinProgressCard() {
   const coinsEarnedToday = useHealthStore((s) => s.coinsEarnedToday);
   const isSyncing        = useHealthStore((s) => s.isSyncing);
 
-  const stepsCoins   = Math.floor(Math.min(steps, 20_000) / 1000) * 10;
-  const calCoins     = Math.floor(Math.min(activeCalories, 2_500) / 100) * 8;
+  const stepsCoins = Math.floor(Math.min(steps, STEPS_COIN_CAP) / 1000) * COINS_PER_1000_STEPS;
+  const calCoins   = Math.floor(Math.min(activeCalories, CALORIES_COIN_CAP) / 100) * COINS_PER_100_CALORIES;
+  const bonus      = stepsCoins > 0 && calCoins > 0 ? DAILY_BOTH_METRICS_BONUS : 0;
 
   return (
     <View style={coinCardStyles.card}>
@@ -209,6 +215,13 @@ function CoinProgressCard() {
         <Text style={coinCardStyles.metricLabel}>{activeCalories} kcal</Text>
         <Text style={coinCardStyles.metricCoins}>+{calCoins} 🪙</Text>
       </View>
+      {bonus > 0 && (
+        <View style={coinCardStyles.row}>
+          <Text style={coinCardStyles.metricIcon}>⭐</Text>
+          <Text style={coinCardStyles.metricLabel}>Both metrics bonus</Text>
+          <Text style={coinCardStyles.metricCoins}>+{bonus} 🪙</Text>
+        </View>
+      )}
     </View>
   );
 }

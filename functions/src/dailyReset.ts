@@ -10,7 +10,7 @@ import { getDb } from "./utils/admin";
  * documents so the daily caps refresh correctly each day.
  */
 export const dailyReset = onSchedule(
-  { schedule: "0 0 * * *", timeZone: "UTC", region: "us-central1" },
+  { schedule: "30 18 * * *", timeZone: "UTC", region: "us-central1" },
   async () => {
     const petsSnap = await getDb().collection("pets").get();
 

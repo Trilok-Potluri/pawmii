@@ -4,6 +4,14 @@ import { httpsCallable } from "firebase/functions";
 import { getFirebaseFunctions } from "../services/firebase";
 import { subscribeToPet } from "../services/firestore";
 import { usePetStore } from "../store/petStore";
+import {
+  FEED_COST_COINS,
+  PLAY_COST_COINS,
+  BATHE_COST_COINS,
+  DAILY_FEED_CAP,
+  DAILY_PLAY_CAP,
+  DAILY_BATHE_CAP,
+} from "@pawmii/shared";
 import type {
   FeedPetPayload,
   FeedPetResponse,
@@ -47,7 +55,7 @@ export function usePet(uid: string | null) {
       }
     } catch (err: any) {
       rollbackFeed();
-      Alert.alert("Oops", _actionErrorMessage(err, "feed", 20));
+      Alert.alert("Oops", _actionErrorMessage(err, "feed", FEED_COST_COINS, DAILY_FEED_CAP));
       console.error("[usePet] feedPetAction error:", err);
     } finally {
       setIsFeedLoading(false);
@@ -68,7 +76,7 @@ export function usePet(uid: string | null) {
       }
     } catch (err: any) {
       rollbackPlay();
-      Alert.alert("Oops", _actionErrorMessage(err, "play", 15));
+      Alert.alert("Oops", _actionErrorMessage(err, "play", PLAY_COST_COINS, DAILY_PLAY_CAP));
       console.error("[usePet] playPetAction error:", err);
     } finally {
       setIsPlayLoading(false);
@@ -89,7 +97,7 @@ export function usePet(uid: string | null) {
       }
     } catch (err: any) {
       rollbackBathe();
-      Alert.alert("Oops", _actionErrorMessage(err, "bathe", 10));
+      Alert.alert("Oops", _actionErrorMessage(err, "bathe", BATHE_COST_COINS, DAILY_BATHE_CAP));
       console.error("[usePet] bathePetAction error:", err);
     } finally {
       setIsBatheLoading(false);
@@ -107,11 +115,11 @@ export function usePet(uid: string | null) {
   };
 }
 
-function _actionErrorMessage(err: any, action: string, cost: number): string {
+function _actionErrorMessage(err: any, action: string, cost: number, cap: number): string {
   const msg = err?.message ?? "";
   if (msg.includes("Insufficient coins"))
     return `Not enough coins! Need ${cost} 🪙 — go move to earn some 💪`;
   if (msg.includes("Daily") && msg.includes("limit"))
-    return `You've already done this 10 times today. Come back tomorrow!`;
+    return `You've already done this ${cap} times today. Come back tomorrow!`;
   return `${action.charAt(0).toUpperCase() + action.slice(1)} failed. Please try again.`;
 }

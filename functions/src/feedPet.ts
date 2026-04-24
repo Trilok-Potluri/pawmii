@@ -86,7 +86,7 @@ export const feedPet = onCall(
           );
         }
 
-        const newHunger = Math.min(pet.hunger + HUNGER_RESTORE_PER_FEED, ATTR_MAX);
+        const newHunger = Math.min((pet.hunger ?? 0) + HUNGER_RESTORE_PER_FEED, ATTR_MAX);
         const newCoinBalance = coinBalance - FEED_COST_COINS;
         const lowest = Math.min(newHunger, pet.playfulness ?? 0, pet.cleanliness ?? 0);
         const newState =

@@ -9,6 +9,7 @@ import { Platform } from "react-native";
 
 let HC: typeof import("react-native-health-connect") | null = null;
 let hcInitialized = false;
+let hcInitPromise: Promise<void> | null = null;
 
 async function getHC() {
   if (Platform.OS !== "android") return null;
@@ -16,8 +17,16 @@ async function getHC() {
     HC = await import("react-native-health-connect");
   }
   if (!hcInitialized) {
-    await HC.initialize();
-    hcInitialized = true;
+    if (!hcInitPromise) {
+      hcInitPromise = HC.initialize().then(() => {
+        hcInitialized = true;
+        hcInitPromise = null;
+      }).catch((err) => {
+        hcInitPromise = null;
+        throw err;
+      });
+    }
+    await hcInitPromise;
   }
   return HC;
 }
@@ -179,8 +188,11 @@ export async function readCaloriesAndroid(startTime: Date, endTime: Date): Promi
 
     const total = Math.round(
       result.records.reduce((sum: number, r: any) => {
-        // react-native-health-connect v3 returns energy as { inKilocalories, inCalories, ... }
-        const kcal = r.energy?.inKilocalories ?? r.energy?.inCalories ?? 0;
+        const kcal = r.energy?.inKilocalories;
+        if (kcal == null) {
+          console.warn("[HealthConnect] inKilocalories missing on energy record", r);
+          return sum;
+        }
         return sum + kcal;
       }, 0)
     );

@@ -13,6 +13,7 @@ import {
   collection,
   query,
   where,
+  limit,
   getDocs,
   Unsubscribe,
 } from "firebase/firestore";
@@ -148,12 +149,14 @@ export function subscribeToPet(
 ): Unsubscribe {
   const db = getFirestoreDb();
   const petsRef = collection(db, "pets");
-  const q = query(petsRef, where("uid", "==", uid));
+  const q = query(petsRef, where("uid", "==", uid), limit(1));
 
   return onSnapshot(q, (snap) => {
-    if (!snap.empty) {
-      const petDoc = snap.docs[0];
-      onUpdate({ petId: petDoc.id, ...petDoc.data() } as Pet);
+    if (snap.empty) {
+      console.warn("[Firestore] subscribeToPet: no pet found for uid", uid);
+      return;
     }
+    const petDoc = snap.docs[0];
+    onUpdate({ petId: petDoc.id, ...petDoc.data() } as Pet);
   });
 }
